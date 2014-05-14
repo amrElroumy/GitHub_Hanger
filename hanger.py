@@ -5,9 +5,9 @@ print "Content-Type: text/html"
 print
 
 import cgitb
-cgitb.enable()
 # Log errors to file
-# cgitb.enable(display=0, logdir="/cgi-bin/")
+# cgitb.enable(display=0, logdir="/cgi-bin/GitHub_Hanger")
+cgitb.enable()
 
 import os
 import cgi
@@ -20,15 +20,23 @@ logging_level = logging.DEBUG
 
 
 def initliaze_logging():
-    handler = logging.FileHandler('log.txt')
+    handler = logging.FileHandler('logfile.log')
     handler.setLevel(logging_level)
 
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        '[%(asctime)s] %(filename)s:%(lineno)d - \
+        %(levelname)s - %(message)s', '%H:%M:%S')
     handler.setFormatter(formatter)
 
     logger.setLevel(logging_level)
     logger.addHandler(handler)
+
+
+class PrettyLog():
+    def __init__(self, obj):
+        self.obj = obj
+    def __repr__(self):
+        return pprint.pformat(self.obj)
 
 
 class github_event(object):
@@ -56,11 +64,9 @@ class push_event(github_event):
     """docstring for push_event"""
     def __init__(self, payload):
         super(push_event, self).__init__(payload)
-        # self.payload = payload
 
     def parse_event_payload(self):
         self.ref = payload['ref']
-        self.commits_size = payload['size']
 
         # Each commit contains sha, message, author[name, email], url
         self.commits = payload['commits']
@@ -68,12 +74,10 @@ class push_event(github_event):
     def execute_event(self):
         self.parse_event_payload()
 
-        print self.head
         print self.ref
-        print self.size
 
-        for commit in commits:
-            print commit['sha'], commit['message'],
+        for commit in self.commits:
+            print commit['id'], commit['message'],
             commit['author']['name'], commit['author']['email'], "\n"
 
 
@@ -81,7 +85,6 @@ class ping_event(github_event):
     """docstring for ping_event"""
     def __init__(self, payload):
         super(ping_event, self).__init__(payload)
-        # self.payload = payload
 
     def parse_event_payload(self):
         self.zen = payload['zen']
@@ -123,54 +126,28 @@ def process_event_name(event_name, payload):
         return empty_event(event_name, payload)
 
 
-print "Begin..<br/><br/>\r"
 print
 
 initliaze_logging()
 
+logger.info("Beginning Hanger")
+
 form = cgi.FieldStorage()
 pprint.pprint(form)
-
-logger.debug(form.getvalue('payload'))
 
 json_payload = form.getvalue('payload', -1)
 
 if json_payload is not -1:
     payload = json.loads(json_payload)
-    logger.debug(payload)
+    logger.debug(PrettyLog(payload))
 
     event_handler = process_event_name(
         os.environ['HTTP_X_GITHUB_EVENT'], payload)
     event_handler.execute_event()
 else:
     print "<br/>\r"
-    print "No payload was receieved!"
+    print "No json payload was receieved!<br/>\r"
+    logger.error(form)
 
-    # print " Dumping the recieved values<br/>\r"
-    # for key in form:
-    #     print "Key %r - Value %r<br/>\r" % (key, form.getvalue(key))
-    #     print
-
-print "<br/>End..<br/>\r"
+logger.info("Kan 3ndk hook w ra7 :D")
 print
-
-
-# # Get the project name from the query string
-# query_string = parse_qs(os.environ['QUERY_STRING'])
-# print query_string
-
-# script_dir = os.path.join(os.curdir, 'scripts')
-# repo = payload['repository']['name']
-# branch = payload['ref'].split('/')[2]
-
-# possible_scripts = [
-#     os.path.join(script_dir, repo),
-#     os.path.join(script_dir, '%s-%s' % (repo, branch)),
-#     os.path.join(script_dir, "all"),
-#     ]
-
-# # Run all scripts that exist for either repo, repo-branch, or all
-# for script in possible_scripts:
-#     if os.path.exists(script):
-#         os.system("%s \'%s\'" % (script, json_payload))
-#
