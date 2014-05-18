@@ -39,6 +39,7 @@ def initliaze_logging():
 class PrettyLog():
     def __init__(self, obj):
         self.obj = obj
+
     def __repr__(self):
         return pprint.pformat(self.obj)
 
@@ -69,23 +70,30 @@ class pull_request_event(github_event):
         # Used to mark the last commit that we reviewed
         self.branch_head = self.payload['pull_request']['head']['sha']
 
+        # Store the action type (Open, Syncrhonize, Clos)
+        self.action = self.payload['action']
+
     def _process_files(self, filenames, raw_urls):
         # try:
         import tempfile
 
         tmp_dir = tempfile.mkdtemp()
 
-        for fname, furl in zip(filenames, raw_urls):
+        with open(tmp_dir + "\\" + 'pathLookup.meta', 'w') as path_lookup_file:
+            for fname, furl in zip(filenames, raw_urls):
+                # request file and save it locally
+                urllib.urlretrieve(
+                    furl, tmp_dir + "\\" + os.path.basename(fname))
 
-            # request file and save it locally
-            urllib.urlretrieve(furl, tmp_dir + "\\" + os.path.basename(fname))
-
+                # map the relative path and the name of the file
+                path_lookup_file.write(
+                    os.path.basename(fname) + " :- " + fname + "\n")
 
         # finally:
         #     try:
         #         import shutil
 
-        #         shutil.rmtree(tmp_dir)
+        #         shutil.rmtree(tmp_dir, ignore_errors=True)
         #     except OSError as exc:
         #         if exc.errno != errno.ENOENT:
         #             logger.error("%r - %r"%(exc.errno, exc.strerror))
@@ -104,8 +112,9 @@ class pull_request_event(github_event):
         all_raw_urls = []
 
         # Get modified files throughout the pull request commits
-        # foreach commit (from last to first)
-        # get modified files, if file was check before don't get it in current commit
+        # foreach commit (from last to first):
+        # get modified files, if file was checked before
+        # don't get it in current commit
         for commit in commits.reversed:
             commit_modified_files = commit.files
 
@@ -121,6 +130,7 @@ class pull_request_event(github_event):
             all_raw_urls = all_raw_urls + new_modified_urls
 
         self._process_files(all_file_names, all_raw_urls)
+
 
 class push_event(github_event):
     """docstring for push_event"""
