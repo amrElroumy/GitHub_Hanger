@@ -14,6 +14,10 @@ import cgi
 import json
 import pprint
 import logging
+import urllib
+from github import Github
+
+GITHUB_AUTHENTICATION_TOKEN = "83debb93c92c314bd712bbc75785b4f38bd3b073"
 
 logger = logging.getLogger(__name__)
 logging_level = logging.DEBUG
@@ -48,17 +52,75 @@ class github_event(object):
         print "Nothing to be done here.\r\n"
 
 
-class pull_event(github_event):
-    """docstring for pull_event"""
+class pull_request_event(github_event):
+    """docstring for pull_request_event"""
     def __init__(self, payload):
-        super(pull_event, self).__init__(payload)
+        super(pull_request_event, self).__init__(payload)
 
-    def parse_payload():
-        pass
+    def parse_payload(self):
+        # Used for directly accesing the repo
+        self.repo_id = self.payload['repository']['id']
 
-    def execute_event():
+        # Used for user-friendly logging
+        self.repo_name = self.payload['repository']['name']
+
+        self.pr_number = self.payload['pull_request']['number']
+
+        # Used to mark the last commit that we reviewed
+        self.branch_head = self.payload['pull_request']['head']['sha']
+
+    def _process_files(self, filenames, raw_urls):
+        # try:
+        import tempfile
+
+        tmp_dir = tempfile.mkdtemp()
+
+        for fname, furl in zip(filenames, raw_urls):
+
+            # request file and save it locally
+            urllib.urlretrieve(furl, tmp_dir + "\\" + os.path.basename(fname))
+
+
+        # finally:
+        #     try:
+        #         import shutil
+
+        #         shutil.rmtree(tmp_dir)
+        #     except OSError as exc:
+        #         if exc.errno != errno.ENOENT:
+        #             logger.error("%r - %r"%(exc.errno, exc.strerror))
+
+    def execute_event(self):
         self.parse_payload()
 
+        gh = Github(GITHUB_AUTHENTICATION_TOKEN)
+
+        # Get Commits' IDs
+        repo = gh.get_repo(self.repo_id)
+        pull_request = repo.get_pull(self.pr_number)
+        commits = pull_request.get_commits()
+
+        all_file_names = []
+        all_raw_urls = []
+
+        # Get modified files throughout the pull request commits
+        # foreach commit (from last to first)
+        # get modified files, if file was check before don't get it in current commit
+        for commit in commits.reversed:
+            commit_modified_files = commit.files
+
+            new_modified_filenames = []
+            new_modified_urls = []
+
+            for f in commit_modified_files:
+                if f.filename not in all_file_names:
+                    new_modified_filenames.append(f.filename)
+                    new_modified_urls.append(f.raw_url)
+
+            all_file_names = all_file_names + new_modified_filenames
+            all_raw_urls = all_raw_urls + new_modified_urls
+
+        self._process_files(all_file_names, all_raw_urls)
 
 class push_event(github_event):
     """docstring for push_event"""
@@ -122,6 +184,8 @@ def process_event_name(event_name, payload):
         return push_event(payload)
     elif event_name == 'ping':
         return ping_event(payload)
+    elif event_name == 'pull_request':
+        return pull_request_event(payload)
     else:
         return empty_event(event_name, payload)
 
