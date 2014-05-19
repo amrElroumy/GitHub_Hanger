@@ -16,24 +16,24 @@ import pprint
 import logging
 import urllib
 from github import Github
-
-GITHUB_AUTHENTICATION_TOKEN = "83debb93c92c314bd712bbc75785b4f38bd3b073"
-
-logger = logging.getLogger(__name__)
-logging_level = logging.DEBUG
+from configobj import ConfigObj
 
 
-def initliaze_logging():
-    handler = logging.FileHandler('logfile.log')
+def initliaze_logging(log_file_path, log_format):
+    logger = logging.getLogger(__name__)
+    logging_level = logging.DEBUG
+
+    handler = logging.FileHandler(log_file_path)
     handler.setLevel(logging_level)
 
-    formatter = logging.Formatter(
-        '[%(asctime)s] %(filename)s:%(lineno)d - \
-        %(levelname)s - %(message)s', '%H:%M:%S')
+    formatter = logging.Formatter(log_format)
+
     handler.setFormatter(formatter)
 
     logger.setLevel(logging_level)
     logger.addHandler(handler)
+
+    return logger
 
 
 class PrettyLog():
@@ -202,7 +202,16 @@ def process_event_name(event_name, payload):
 
 print
 
-initliaze_logging()
+
+CONFIG_PATH = "config.ini"
+
+config = ConfigObj(CONFIG_PATH, create_empty=True)
+
+GITHUB_AUTHENTICATION_TOKEN = config['GitHub']['API_TOKEN']
+LOG_FILE_PATH = config['Logging']['LOG_PATH']
+log_format = config['Logging']['Format']
+
+logger = initliaze_logging(LOG_FILE_PATH, log_format)
 
 logger.info("Beginning Hanger")
 
