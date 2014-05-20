@@ -1,22 +1,9 @@
-#!C:/Python27/python.exe -u
-# -*- coding: UTF-8 -*-
-
-print("Content-Type: text/html")
-print
-
-import cgitb
-# Log errors to file
-# cgitb.enable(display=0, logdir="/cgi-bin/GitHub_Hanger")
-cgitb.enable()
-
-print
-
 import os
-import cgi
 import json
 import pprint
 import logging
 from configobj import ConfigObj
+from urlparse import parse_qs
 
 
 def initialize_logging(log_file_path, logfmt, datefmt):
@@ -43,58 +30,62 @@ class PrettyLog():
     def __repr__(self):
         return pprint.pformat(self.obj)
 
+def application(environ, start_response):
+    ## Loading configurations
+    CONFIG_PATH = "/var/www/ghservice/config.ini"
 
-## Loading configurations
-CONFIG_PATH = "config.ini"
+    config = ConfigObj(CONFIG_PATH, interpolation=False)
 
-config = ConfigObj(CONFIG_PATH, interpolation=False)
+    LOG_FILE_PATH = config['Logging']['LOG_PATH']
+    LOG_FORMAT = config['Logging']['LOG_FORMAT']
+    LOG_DATE_FORMAT = config['Logging']['DATE_FORMAT']
+    ## Finished loading configurations
 
-LOG_FILE_PATH = config['Logging']['LOG_PATH']
-LOG_FORMAT = config['Logging']['LOG_FORMAT']
-LOG_DATE_FORMAT = config['Logging']['DATE_FORMAT']
-## Finished loading configurations
+    logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)
 
-logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)
+    logger.info("Beginning Hanger")
 
-logger.info("Beginning Hanger")
+    json_payload = parse_qs(environ['wsgi.input'].read())['payload'][0]
 
-form = cgi.FieldStorage()
-pprint.pprint(form)
+    if json_payload:
+        payload = json.loads(json_payload)
+        logger.debug(PrettyLog(payload))
 
-json_payload = form.getvalue('payload', -1)
+        import subprocess
+        import sys
 
-if json_payload is not -1:
-    payload = json.loads(json_payload)
-    logger.debug(PrettyLog(payload))
+        from tempfile import NamedTemporaryFile
 
-    import subprocess
-    import sys
+        # Create a temp file with payload and pass it to processor
+        with NamedTemporaryFile(delete=False) as f:
+            f.write(environ['HTTP_X_GITHUB_EVENT'] + '\n')
+            f.write(json_payload + '\n')
 
-    from tempfile import NamedTemporaryFile
+            # import os
+            # command = './hookprocessor.py ' + f.name
+            # os.system("at now <<< " + command)
 
-    # Create a temp file with payload and pass it to processor
-    with NamedTemporaryFile(delete=False) as f:
-        f.write(os.environ['HTTP_X_GITHUB_EVENT'] + '\n')
-        f.write(json_payload + '\n')
+            # import os
+            # command = './hookprocessor.py ' + f.name
+            # os.system("batch <<< " + command)
 
-        # import os
-        # command = './hookprocessor.py ' + f.name
-        # os.system("at now <<< " + command)
+            # DETACHED_PROCESS = 0x00000008
+            # p = subprocess.Popen(
+            #     [sys.executable, './hookprocessor.py', f.name],
+            #     stdout=subprocess.PIPE,
+            #     stderr=subprocess.PIPE,
+            #     stdin=subprocess.PIPE,
+            #     creationflags=DETACHED_PROCESS)
+    else:
+        print("<br/>\r")
+        print("No json payload was receieved!<br/>\r")
+        logger.error(json_payload)
 
-        # import os
-        # command = './hookprocessor.py ' + f.name
-        # os.system("batch <<< " + command)
+    logger.info("Kan 3ndk hook w ra7 :D")
 
-        DETACHED_PROCESS = 0x00000008
-        p = subprocess.Popen(
-            [sys.executable, './hookprocessor.py', f.name],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE,
-            creationflags=DETACHED_PROCESS)
-else:
-    print("<br/>\r")
-    print("No json payload was receieved!<br/>\r")
-    logger.error(form)
+    status = '200 OK'
+    response_headers = [('Content-type', 'text/html')]
+    start_response(status, response_headers)
 
-logger.info("Kan 3ndk hook w ra7 :D")
+    return ['Done']
+
