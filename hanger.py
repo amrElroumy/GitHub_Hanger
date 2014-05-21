@@ -1,9 +1,15 @@
-import os
-import json
 import pprint
 import logging
 from configobj import ConfigObj
 from urlparse import parse_qs
+
+
+class PrettyLog():
+    def __init__(self, obj):
+        self.obj = obj
+
+    def __repr__(self):
+        return pprint.pformat(self.obj)
 
 
 def initialize_logging(log_file_path, logfmt, datefmt):
@@ -23,14 +29,6 @@ def initialize_logging(log_file_path, logfmt, datefmt):
     return logger
 
 
-class PrettyLog():
-    def __init__(self, obj):
-        self.obj = obj
-
-    def __repr__(self):
-        return pprint.pformat(self.obj)
-
-
 def application(environ, start_response):
     ## Loading configurations
     CONFIG_PATH = "/var/www/ghservice/config.ini"
@@ -45,46 +43,41 @@ def application(environ, start_response):
 
     logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)
 
-    logger.info("Beginning Hanger")
+    logger.info('Started Hanger for "%s"' % environ['HTTP_X_GITHUB_DELIVERY'])
 
     json_payload = parse_qs(environ['wsgi.input'].read())['payload'][0]
 
     if json_payload:
-        # payload = json.loads(json_payload)
-        # logger.debug(PrettyLog(payload))
 
         import subprocess
         import sys
 
         from tempfile import NamedTemporaryFile
 
+        filename = ""
+
         # Create a temp file with payload and pass it to processor
         with NamedTemporaryFile(delete=False, dir=PVT_DIR_PATH) as f:
             f.write(environ['HTTP_X_GITHUB_EVENT'] + '\n')
             f.write(json_payload + '\n')
+            f.flush()
 
-            # import os
-            # command = './hookprocessor.py ' + f.name
-            # os.system("at now <<< " + command)
-
-            # import os
-            # command = './hookprocessor.py ' + f.name
-            # os.system("batch <<< " + command)
+            filename = f.name
 
             command = [
                 sys.executable,
                 '/var/www/ghservice/hookprocessor.py',
-                f.name]
+                filename]
 
             subprocess.Popen(
                 command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE)
-            # p.communicate()
+                # stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                # stdin=subprocess.PIPE,
+                )
+
     else:
-        print("<br/>\r")
-        print("No json payload was receieved!<br/>\r")
+        logger.error("No json payload was receieved!<br/>\r")
         logger.error(json_payload)
 
     logger.info("Kan 3ndk hook w ra7 :D")

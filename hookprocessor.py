@@ -1,14 +1,15 @@
+#!/usr/bin/env python
+
 import os
-import json
-import pprint
 import logging
 import subprocess
 
-from sys import argv
-from github import Github
-from sys import executable
+from json import loads
+from pprint import pformat
 from urllib import urlretrieve
 from configobj import ConfigObj
+from sys import argv, exc_info, executable
+from github import Github, GithubException
 
 
 def initialize_logging(log_file_path, logfmt, datefmt):
@@ -33,7 +34,7 @@ class PrettyLog():
         self.obj = obj
 
     def __repr__(self):
-        return pprint.pformat(self.obj)
+        return pformat(self.obj)
 
 
 class github_event(object):
@@ -42,7 +43,7 @@ class github_event(object):
         self.payload = payload
 
     def execute_event(self):
-        print("Nothing to be done here.\r\n")
+        logger.debug("Nothing to be done here.\r\n")
 
 
 class pull_request_event(github_event):
@@ -110,7 +111,7 @@ class pull_request_event(github_event):
 
     def _parse_lints(self, lint_output_path, delimiter):
 
-        logger.debug('Parsing lints.')
+        logger.info('Parsing lints.')
 
         bulk_lints = ''
         with open(lint_output_path, 'r') as lints:
@@ -118,32 +119,33 @@ class pull_request_event(github_event):
 
             bulk_lints = bulk_lints.strip(delimiter).split(delimiter)
 
+        # Combine the each parsed lint into a tuple to easy processing
         lints = zip(bulk_lints[0::3], bulk_lints[1::3], bulk_lints[2::3])
 
-        for lint in lints:
-            logger.debug(lint)
-
-        logger.debug('Finished parsing lints.')
-
+        logger.info('Finished parsing lints.')
         return lints
 
     def _post_review_comments(self, filenames, lints):
-        logger.debug('Posting review comments.')
+        logger.info('Posting review comments.')
 
         head_commit = self.pull_request.get_commits().reversed[0]
 
-        path_lookup = [(os.path.basename(p), p) for p in filenames]
+        path_lookup = {os.path.basename(p): p for p in filenames}
 
         for path, position, comment_body in lints:
 
             basename = os.path.basename(path)
             comment_body = position + ': ' + comment_body
+            comment_body = comment_body.strip("\n")
 
-            filepath = path_lookup[basename] + '/' + os.path.basename(basename)
+            filepath = path_lookup[basename]
+
             self.pull_request.create_review_comment(
-                comment_body, head_commit, filepath, 0)
+                comment_body,
+                head_commit,
+                filepath, 0)
 
-        logger.debug('Finished posting review comments.')
+        logger.info('Finished posting review comments.')
 
     def execute_event(self):
         self.parse_payload()
@@ -177,7 +179,6 @@ class pull_request_event(github_event):
             all_raw_urls = all_raw_urls + new_modified_urls
 
         # Create tmp directory for processing
-        # try:
         import tempfile
         working_dir = tempfile.mkdtemp(dir=PVT_DIR_PATH)
 
@@ -191,14 +192,12 @@ class pull_request_event(github_event):
             if lints:
                 self._post_review_comments(all_file_names, lints)
 
-        # finally:
-        #     try:
-        #         import shutil
+        try:
+            import shutil
 
-        #         shutil.rmtree(working_dir, ignore_errors=True)
-        #     except OSError as exc:
-        #         if exc.errno != errno.ENOENT:
-        #             logger.error("%r - %r"%(exc.errno, exc.strerror))
+            shutil.rmtree(working_dir, ignore_errors=True)
+        except OSError as exc:
+            logger.error("%r - %r" % (exc.errno, exc.strerror))
 
 
 class push_event(github_event):
@@ -215,10 +214,10 @@ class push_event(github_event):
     def execute_event(self):
         self.parse_event_payload()
 
-        print(self.ref)
+        logger.debug(self.ref)
 
         for commit in self.commits:
-            print(
+            logger.debug(
                 commit['id'], commit['message'],
                 commit['author']['name'], commit['author']['email'], "\n")
 
@@ -235,7 +234,7 @@ class ping_event(github_event):
     def execute_event(self):
         self.parse_event_payload()
 
-        print(self.hook_id, self.zen, "\n")
+        logger.debug(self.hook_id, self.zen, "\n")
 
 
 class empty_event(github_event):
@@ -251,9 +250,9 @@ class empty_event(github_event):
     def execute_event(self):
         self.parse_event_payload()
 
-        print("No handler is implemented for event %r\n" % self.event_name)
-        print("Payload: ")
-        pprint.pprint(payload)
+        logger.debug('No handler implemented for event %s' % self.event_name)
+        logger.debug('Payload: ')
+        logger.debug(PrettyLog(payload))
 
 
 def process_event_name(event_name, payload):
@@ -295,18 +294,25 @@ script, payload_path = argv
 event_name = ''
 json_payload = []
 
-# logger.debug(payload_path)
-
 with open(payload_path, 'r') as out:
     event_name = out.readline().strip("\n")
     payload = out.readline()
-    json_payload = json.loads(payload)
+    json_payload = loads(payload)
 os.remove(payload_path)
 
 event_handler = process_event_name(event_name, json_payload)
 
-logger.debug('Beginning event execution.')
-event_handler.execute_event()
-logger.debug('Finished event execute_event.')
+try:
+    logger.info('Beginning event execution.')
+    event_handler.execute_event()
+    logger.info('Finished event execute_event.')
+
+except GithubException as e:
+    logger.error(e.status + " - " + e.data)
+    raise
+
+except:
+    logger.error("Unexpected error:", exc_info()[0])
+    raise
 
 logger.info("Finished hook processing")
