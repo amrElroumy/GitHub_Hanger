@@ -78,7 +78,6 @@ class pull_request_event(github_event):
             for fname, furl in zip(filenames, raw_urls):
                 # request file and save it locally
                 urlretrieve(furl, working_dir + "/" + os.path.basename(fname))
-                os.chmod(fname, )
 
                 # map the relative path and the name of the file
                 path_lookup_file.write(
