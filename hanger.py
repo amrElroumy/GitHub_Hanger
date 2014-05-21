@@ -30,6 +30,7 @@ class PrettyLog():
     def __repr__(self):
         return pprint.pformat(self.obj)
 
+
 def application(environ, start_response):
     ## Loading configurations
     CONFIG_PATH = "/var/www/ghservice/config.ini"
@@ -39,6 +40,7 @@ def application(environ, start_response):
     LOG_FILE_PATH = config['Logging']['LOG_PATH']
     LOG_FORMAT = config['Logging']['LOG_FORMAT']
     LOG_DATE_FORMAT = config['Logging']['DATE_FORMAT']
+    PVT_DIR_PATH = config['Application']['PVT_DIR']
     ## Finished loading configurations
 
     logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)
@@ -48,8 +50,8 @@ def application(environ, start_response):
     json_payload = parse_qs(environ['wsgi.input'].read())['payload'][0]
 
     if json_payload:
-        payload = json.loads(json_payload)
-        logger.debug(PrettyLog(payload))
+        # payload = json.loads(json_payload)
+        # logger.debug(PrettyLog(payload))
 
         import subprocess
         import sys
@@ -57,7 +59,7 @@ def application(environ, start_response):
         from tempfile import NamedTemporaryFile
 
         # Create a temp file with payload and pass it to processor
-        with NamedTemporaryFile(delete=False) as f:
+        with NamedTemporaryFile(delete=False, dir=PVT_DIR_PATH) as f:
             f.write(environ['HTTP_X_GITHUB_EVENT'] + '\n')
             f.write(json_payload + '\n')
 
@@ -69,13 +71,17 @@ def application(environ, start_response):
             # command = './hookprocessor.py ' + f.name
             # os.system("batch <<< " + command)
 
-            # DETACHED_PROCESS = 0x00000008
-            # p = subprocess.Popen(
-            #     [sys.executable, './hookprocessor.py', f.name],
-            #     stdout=subprocess.PIPE,
-            #     stderr=subprocess.PIPE,
-            #     stdin=subprocess.PIPE,
-            #     creationflags=DETACHED_PROCESS)
+            command = [
+                sys.executable,
+                '/var/www/ghservice/hookprocessor.py',
+                f.name]
+
+            subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE)
+            # p.communicate()
     else:
         print("<br/>\r")
         print("No json payload was receieved!<br/>\r")
@@ -88,4 +94,3 @@ def application(environ, start_response):
     start_response(status, response_headers)
 
     return ['Done']
-

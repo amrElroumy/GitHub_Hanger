@@ -10,9 +10,6 @@ from sys import executable
 from urllib import urlretrieve
 from configobj import ConfigObj
 
-import cgitb
-cgitb.enable()
-
 
 def initialize_logging(log_file_path, logfmt, datefmt):
     logger = logging.getLogger(__name__)
@@ -76,11 +73,12 @@ class pull_request_event(github_event):
     def _download_commit_files(self, working_dir, filenames, raw_urls):
         logger.debug('Downloading the commit files.')
 
-        path = working_dir + "\\" + 'pathLookup.meta'
+        path = working_dir + "/" + 'pathLookup.meta'
         with open(path, 'w') as path_lookup_file:
             for fname, furl in zip(filenames, raw_urls):
                 # request file and save it locally
-                urlretrieve(furl, working_dir + "\\" + os.path.basename(fname))
+                urlretrieve(furl, working_dir + "/" + os.path.basename(fname))
+                os.chmod(fname, )
 
                 # map the relative path and the name of the file
                 path_lookup_file.write(
@@ -91,12 +89,22 @@ class pull_request_event(github_event):
     def _lint_files(self, working_dir, command):
         logger.debug('Starting linting.')
 
-        p = subprocess.Popen(
-            [executable, command, working_dir],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.PIPE)
-        p.communicate()
+        logger.debug(command)
+        logger.debug(working_dir)
+
+        try:
+            p = subprocess.Popen(
+                [executable, command, working_dir],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE)
+
+            logger.debug(p.communicate())
+
+        except subprocess.CalledProcessError as e:
+            logger.debug(e.returncode)
+            logger.debug(p.communicate())
+            return None
 
         logger.debug('Finished linting.')
         return "flintOutput"
@@ -172,13 +180,17 @@ class pull_request_event(github_event):
         # Create tmp directory for processing
         # try:
         import tempfile
-        working_dir = tempfile.mkdtemp()
+        working_dir = tempfile.mkdtemp(dir=PVT_DIR_PATH)
 
         self._download_commit_files(working_dir, all_file_names, all_raw_urls)
         lint_output_path = self._lint_files(working_dir, FLINT_COMMAND)
-        lints = self._parse_lints(
-            working_dir + "\\" + lint_output_path, DELIMITER_TOKEN)
-        self._post_review_comments(all_file_names, lints)
+
+        if lint_output_path is not None:
+            lints = self._parse_lints(
+                working_dir + "/" + lint_output_path, DELIMITER_TOKEN)
+
+            if lints:
+                self._post_review_comments(all_file_names, lints)
 
         # finally:
         #     try:
@@ -259,7 +271,7 @@ def process_event_name(event_name, payload):
         return empty_event(event_name, payload)
 
 ## Loading configurations
-CONFIG_PATH = "config.ini"
+CONFIG_PATH = "/var/www/ghservice/config.ini"
 
 config = ConfigObj(CONFIG_PATH, interpolation=False)
 
@@ -270,6 +282,8 @@ LOG_DATE_FORMAT = config['Logging']['DATE_FORMAT']
 
 FLINT_COMMAND = config['Linters']['FLINT']
 DELIMITER_TOKEN = config['Linters']['DELIMITER_TOKEN']
+
+PVT_DIR_PATH = config['Application']['PVT_DIR']
 ## Finished loading configurations
 
 logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)
@@ -282,11 +296,13 @@ script, payload_path = argv
 event_name = ''
 json_payload = []
 
+# logger.debug(payload_path)
+
 with open(payload_path, 'r') as out:
     event_name = out.readline().strip("\n")
     payload = out.readline()
     json_payload = json.loads(payload)
-# os.remove(payload_path)
+os.remove(payload_path)
 
 event_handler = process_event_name(event_name, json_payload)
 
