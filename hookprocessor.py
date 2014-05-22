@@ -3,8 +3,8 @@
 import os
 import logging
 import subprocess
+import json
 
-from json import loads
 from pprint import pformat
 from urllib import urlretrieve
 from configobj import ConfigObj
@@ -27,6 +27,62 @@ def initialize_logging(log_file_path, logfmt, datefmt):
     logger.addHandler(handler)
 
     return logger
+
+
+class PullsConfigUtilities(object):
+    """docstring for PullsConfigUtilities"""
+    def __init__(self):
+        super(PullsConfigUtilities, self).__init__()
+
+    @staticmethod
+    def load_pulls_file(filepath):
+        j_obj = []
+        if os.path.exists(filepath):
+            with open(filepath, 'r') as json_file:
+                j_obj = json.load(json_file)
+        return j_obj
+
+    @staticmethod
+    def save_pulls_file(filepath, json_obj):
+        # Output the updated file with pretty JSON
+        with open(filepath, 'w+') as outfile:
+            json.dump(
+                json_obj, outfile,
+                sort_keys=True, indent=4, separators=(',', ': '))
+
+    @staticmethod
+    def get_head_sha(jsonObj, pullNumber):
+
+        heads = [
+            pull['head'] for pull in jsonObj
+            if pull['number'] == pullNumber]
+
+        if len(heads) == 0:
+            return None
+        elif len(heads) > 1:
+            return -1
+        else:
+            return heads[0]
+
+    @staticmethod
+    def add_pull(jsonObj, pullNumber, head, ref):
+        jsonObj.append({"number": pullNumber, "ref": ref, "head": head})
+
+    @staticmethod
+    def update_pull(jsonObj, pullNumber, head, ref):
+        heads = [pull for pull in jsonObj if pull['number'] == pullNumber]
+        if len(heads) == 0:
+            PullsConfigUtilities.add_pull(jsonObj, pullNumber, head, ref)
+        else:
+            heads[0]['head'] = head
+
+    @staticmethod
+    def delete_pull(jsonObj, pullNumber=None, head=None):
+        if pullNumber:
+            jsonObj[:] = [i for i in jsonObj if i['number'] != pullNumber]
+
+        if head:
+            jsonObj[:] = [i for i in jsonObj if i['head'] != head]
 
 
 class PrettyLog():
@@ -174,6 +230,7 @@ class PullRequestEvent(GithubEvent):
 
         # Used to mark the last commit that we reviewed
         self.branch_head = self.payload['pull_request']['head']['sha']
+        self.ref = self.payload['pull_request']['head']['ref']
 
         # Store the action type (Open, Synchronize, Close)
         self.action = self.payload['action']
@@ -182,6 +239,10 @@ class PullRequestEvent(GithubEvent):
 
     def execute_event(self):
         self.parse_payload()
+
+        # Nothing to be done here, return
+        if self.action == 'close':
+            return
 
         gh = GithubWrapper.get_github_object()
 
@@ -193,6 +254,23 @@ class PullRequestEvent(GithubEvent):
         all_file_names = []
         all_raw_urls = []
 
+        # Get last synchronized head
+        pulls_json_conf = PullsConfigUtilities.load_pulls_file(PULLS_JSON_PATH)
+
+        # [TODO] Error codes handling
+        old_pull_head = PullsConfigUtilities.get_head_sha(
+            pulls_json_conf, self.pr_number)
+
+        # Update pulls config to the latest head
+        if self.action == 'open':
+            PullsConfigUtilities.add_pull(
+                pulls_json_conf, self.pr_number, self.branch_head, self.ref)
+        elif self.action == 'reopened' or self.action == 'synchronize':
+            PullsConfigUtilities.update_pull(
+                pulls_json_conf, self.pr_number, self.branch_head, self.ref)
+
+        PullsConfigUtilities.save_pulls_file(PULLS_JSON_PATH, pulls_json_conf)
+
         # Get modified files throughout the pull request commits
         # foreach commit (from last to first):
         # get modified files, if file was checked before
@@ -202,6 +280,10 @@ class PullRequestEvent(GithubEvent):
 
             new_modified_filenames = []
             new_modified_urls = []
+
+            # if we reached the last synched head, break
+            if commit.sha == old_pull_head:
+                break
 
             for f in commit_modified_files:
                 if f.filename not in all_file_names:
@@ -305,6 +387,8 @@ FLINT_COMMAND = config['Linters']['FLINT']
 DELIMITER_TOKEN = config['Linters']['DELIMITER_TOKEN']
 
 PVT_DIR_PATH = config['Application']['PVT_DIR']
+
+PULLS_JSON_PATH = config['PullsHeads']['PATH']
 ## Finished loading configurations
 
 logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)
@@ -320,7 +404,7 @@ json_payload = []
 with open(payload_path, 'r') as out:
     event_name = out.readline().strip("\n")
     payload = out.readline()
-    json_payload = loads(payload)
+    json_payload = json.loads(payload)
 os.remove(payload_path)
 
 event_handler = GithubEvent.event_factory(event_name, json_payload)
