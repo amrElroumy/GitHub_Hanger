@@ -127,6 +127,19 @@ class GithubEvent(object):
     def __init__(self, payload):
         self.payload = payload
 
+    @staticmethod
+    def event_factory(event_name, payload):
+        # Construct event handler based on event name
+        # Return empty event handler if no proper handler is found
+        if event_name == 'push':
+            return PushEvent(payload)
+        elif event_name == 'ping':
+            return PingEvent(payload)
+        elif event_name == 'pull_request':
+            return PullRequestEvent(payload)
+        else:
+            return EmptyEvent(event_name, payload)
+
     def execute_event(self):
         logger.debug("Nothing to be done here.\r\n")
 
@@ -267,19 +280,6 @@ class EmptyEvent(GithubEvent):
         logger.debug(PrettyLog(payload))
 
 
-def process_event_name(event_name, payload):
-    # Construct event handler based on event name
-    # Return empty event handler if no proper handler
-    # is found
-    if event_name == 'push':
-        return PushEvent(payload)
-    elif event_name == 'ping':
-        return PingEvent(payload)
-    elif event_name == 'pull_request':
-        return PullRequestEvent(payload)
-    else:
-        return EmptyEvent(event_name, payload)
-
 ## Loading configurations
 CONFIG_PATH = "/var/www/ghservice/config.ini"
 
@@ -312,7 +312,7 @@ with open(payload_path, 'r') as out:
     json_payload = loads(payload)
 os.remove(payload_path)
 
-event_handler = process_event_name(event_name, json_payload)
+event_handler = GithubEvent.event_factory(event_name, json_payload)
 
 try:
     logger.info('Beginning event execution.')
