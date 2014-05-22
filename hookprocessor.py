@@ -41,7 +41,7 @@ class LintWrapper(object):
     """docstring for LintWrapper"""
     @staticmethod
     def lint_files(working_dir, command):
-        logger.debug('Starting linting.')
+        logger.info('Starting linting.')
 
         logger.debug(command)
         logger.debug(working_dir)
@@ -60,7 +60,7 @@ class LintWrapper(object):
             logger.debug(p.communicate())
             return None
 
-        logger.debug('Finished linting.')
+        logger.info('Finished linting.')
         return "flintOutput"
 
     @staticmethod
@@ -82,6 +82,17 @@ class LintWrapper(object):
 
 class GithubWrapper(object):
     """docstring for GithubWrapper"""
+
+    # static variable (acts as service provider)
+    # [Todo] consider using Borgs
+    _github_object = None
+
+    @staticmethod
+    def get_github_object():
+        if not GithubWrapper._github_object:
+            _github_object = Github(GITHUB_AUTHENTICATION_TOKEN)
+            return _github_object
+
     @staticmethod
     def download_commit_files(working_dir, filenames, raw_urls):
         logger.debug('Downloading the commit files.')
@@ -172,7 +183,7 @@ class PullRequestEvent(GithubEvent):
     def execute_event(self):
         self.parse_payload()
 
-        gh = Github(GITHUB_AUTHENTICATION_TOKEN)
+        gh = GithubWrapper.get_github_object()
 
         # Get Commits' IDs
         repo = gh.get_repo(self.repo_id)
@@ -318,11 +329,9 @@ try:
     logger.info('Beginning event execution.')
     event_handler.execute_event()
     logger.info('Finished event execute_event.')
-
 except GithubException as e:
     logger.error(e.status + " - " + e.data)
     raise
-
 except:
     logger.error("Unexpected error:", exc_info()[0])
     raise
