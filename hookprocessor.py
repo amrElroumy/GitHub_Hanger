@@ -37,56 +37,10 @@ class PrettyLog():
         return pformat(self.obj)
 
 
-class github_event(object):
-    """docstring for github_event"""
-    def __init__(self, payload):
-        self.payload = payload
-
-    def execute_event(self):
-        logger.debug("Nothing to be done here.\r\n")
-
-
-class pull_request_event(github_event):
-    """docstring for pull_request_event"""
-    def __init__(self, payload):
-        super(pull_request_event, self).__init__(payload)
-        logger.debug('Initialized "pull request" event handler')
-
-    def parse_payload(self):
-        logger.debug('Parsing payload')
-
-        # Used for directly accessing the repo
-        self.repo_id = self.payload['repository']['id']
-
-        # Used for user-friendly logging
-        self.repo_name = self.payload['repository']['name']
-
-        self.pr_number = self.payload['pull_request']['number']
-
-        # Used to mark the last commit that we reviewed
-        self.branch_head = self.payload['pull_request']['head']['sha']
-
-        # Store the action type (Open, Synchronize, Close)
-        self.action = self.payload['action']
-
-        logger.debug('Finished parsing payload')
-
-    def _download_commit_files(self, working_dir, filenames, raw_urls):
-        logger.debug('Downloading the commit files.')
-
-        path = working_dir + "/" + 'pathLookup.meta'
-        with open(path, 'w') as path_lookup_file:
-            for fname, furl in zip(filenames, raw_urls):
-                # request file and save it locally
-                urlretrieve(furl, working_dir + "/" + os.path.basename(fname))
-
-                # map the relative path and the name of the file
-                path_lookup_file.write(
-                    os.path.basename(fname) + " :- " + fname + "\n")
-
-        logger.debug('Finished downloading the commit files.')
-
-    def _lint_files(self, working_dir, command):
+class LintWrapper(object):
+    """docstring for LintWrapper"""
+    @staticmethod
+    def lint_files(working_dir, command):
         logger.debug('Starting linting.')
 
         logger.debug(command)
@@ -109,8 +63,8 @@ class pull_request_event(github_event):
         logger.debug('Finished linting.')
         return "flintOutput"
 
-    def _parse_lints(self, lint_output_path, delimiter):
-
+    @staticmethod
+    def parse_lints(lint_output_path, delimiter):
         logger.info('Parsing lints.')
 
         bulk_lints = ''
@@ -125,10 +79,30 @@ class pull_request_event(github_event):
         logger.info('Finished parsing lints.')
         return lints
 
-    def _post_review_comments(self, filenames, lints):
+
+class GithubWrapper(object):
+    """docstring for GithubWrapper"""
+    @staticmethod
+    def download_commit_files(working_dir, filenames, raw_urls):
+        logger.debug('Downloading the commit files.')
+
+        path = working_dir + "/" + 'pathLookup.meta'
+        with open(path, 'w') as path_lookup_file:
+            for fname, furl in zip(filenames, raw_urls):
+                # request file and save it locally
+                urlretrieve(furl, working_dir + "/" + os.path.basename(fname))
+
+                # map the relative path and the name of the file
+                path_lookup_file.write(
+                    os.path.basename(fname) + " :- " + fname + "\n")
+
+        logger.debug('Finished downloading the commit files.')
+
+    @staticmethod
+    def post_review_comments(pull_request, filenames, lints):
         logger.info('Posting review comments.')
 
-        head_commit = self.pull_request.get_commits().reversed[0]
+        head_commit = pull_request.get_commits().reversed[0]
 
         path_lookup = {os.path.basename(p): p for p in filenames}
 
@@ -140,12 +114,47 @@ class pull_request_event(github_event):
 
             filepath = path_lookup[basename]
 
-            self.pull_request.create_review_comment(
+            pull_request.create_review_comment(
                 comment_body,
                 head_commit,
                 filepath, 0)
 
         logger.info('Finished posting review comments.')
+
+
+class GithubEvent(object):
+    """docstring for GithubEvent"""
+    def __init__(self, payload):
+        self.payload = payload
+
+    def execute_event(self):
+        logger.debug("Nothing to be done here.\r\n")
+
+
+class PullRequestEvent(GithubEvent):
+    """docstring for PullRequestEvent"""
+    def __init__(self, payload):
+        super(PullRequestEvent, self).__init__(payload)
+        logger.debug('Initialized "pull request" event handler')
+
+    def parse_payload(self):
+        logger.debug('Parsing payload')
+
+        # Used for directly accessing the repo
+        self.repo_id = self.payload['repository']['id']
+
+        # Used for user-friendly logging
+        self.repo_name = self.payload['repository']['name']
+
+        self.pr_number = self.payload['pull_request']['number']
+
+        # Used to mark the last commit that we reviewed
+        self.branch_head = self.payload['pull_request']['head']['sha']
+
+        # Store the action type (Open, Synchronize, Close)
+        self.action = self.payload['action']
+
+        logger.debug('Finished parsing payload')
 
     def execute_event(self):
         self.parse_payload()
@@ -182,15 +191,18 @@ class pull_request_event(github_event):
         import tempfile
         working_dir = tempfile.mkdtemp(dir=PVT_DIR_PATH)
 
-        self._download_commit_files(working_dir, all_file_names, all_raw_urls)
-        lint_output_path = self._lint_files(working_dir, FLINT_COMMAND)
+        GithubWrapper.download_commit_files(
+            working_dir, all_file_names, all_raw_urls)
+
+        lint_output_path = LintWrapper.lint_files(working_dir, FLINT_COMMAND)
 
         if lint_output_path is not None:
-            lints = self._parse_lints(
+            lints = LintWrapper.parse_lints(
                 working_dir + "/" + lint_output_path, DELIMITER_TOKEN)
 
             if lints:
-                self._post_review_comments(all_file_names, lints)
+                GithubWrapper.post_review_comments(
+                    self.pull_request, all_file_names, lints)
 
         try:
             import shutil
@@ -200,10 +212,10 @@ class pull_request_event(github_event):
             logger.error("%r - %r" % (exc.errno, exc.strerror))
 
 
-class push_event(github_event):
-    """docstring for push_event"""
+class PushEvent(GithubEvent):
+    """docstring for PushEvent"""
     def __init__(self, payload):
-        super(push_event, self).__init__(payload)
+        super(PushEvent, self).__init__(payload)
 
     def parse_event_payload(self):
         self.ref = self.payload['ref']
@@ -222,10 +234,10 @@ class push_event(github_event):
                 commit['author']['name'], commit['author']['email'], "\n")
 
 
-class ping_event(github_event):
-    """docstring for ping_event"""
+class PingEvent(GithubEvent):
+    """docstring for PingEvent"""
     def __init__(self, payload):
-        super(ping_event, self).__init__(payload)
+        super(PingEvent, self).__init__(payload)
 
     def parse_event_payload(self):
         self.zen = payload['zen']
@@ -237,11 +249,11 @@ class ping_event(github_event):
         logger.debug(self.hook_id, self.zen, "\n")
 
 
-class empty_event(github_event):
-    """docstring for empty_event"""
+class EmptyEvent(GithubEvent):
+    """docstring for EmptyEvent"""
     def __init__(self, event_name, payload):
         self.event_name = event_name
-        super(empty_event, self).__init__(payload)
+        super(EmptyEvent, self).__init__(payload)
 
     def parse_event_payload(self):
         # nothing to be done here
@@ -260,13 +272,13 @@ def process_event_name(event_name, payload):
     # Return empty event handler if no proper handler
     # is found
     if event_name == 'push':
-        return push_event(payload)
+        return PushEvent(payload)
     elif event_name == 'ping':
-        return ping_event(payload)
+        return PingEvent(payload)
     elif event_name == 'pull_request':
-        return pull_request_event(payload)
+        return PullRequestEvent(payload)
     else:
-        return empty_event(event_name, payload)
+        return EmptyEvent(event_name, payload)
 
 ## Loading configurations
 CONFIG_PATH = "/var/www/ghservice/config.ini"
