@@ -91,21 +91,21 @@ def lint(configObj, pathToLint):
     pathToLint = os.path.normpath(os.path.normcase(pathToLint)) + os.path.sep
     xmlConfigFile = configObj["KWStyle"]["xml_config_file"]
 
-    for k,v in configObj["ignore_patterns"].iteritems():
-        ignoreList.append(v)
+    for pattern in configObj["ignore_patterns"]:
+        ignoreList.append(pattern)
 
     try: #there might be nested patterns specific to me
-        for k,v in configObj["KWStyle"]["ignore_patterns"].iteritems():
-            ignoreList.append(v)
+        for pattern in configObj["KWStyle"]["ignore_patterns"]:
+            ignoreList.append(pattern)
     except Exception:
         pass
 
-    for k,v in configObj["include_patterns"].iteritems():
-        filesPatternsToLint.append(v)
+    for pattern in configObj["include_patterns"]:
+        filesPatternsToLint.append(pattern)
 
     try: #there might be nested patterns specific to me
-        for k,v in configObj["KWStyle"]["include_patterns"].iteritems():
-            ignoreList.append(v)
+        for pattern in configObj["KWStyle"]["include_patterns"]:
+            ignoreList.append(pattern)
     except Exception:
         pass
 

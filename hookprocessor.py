@@ -104,15 +104,18 @@ class LinterWrapper(object):
 
         # iterate over all available linter modules invoke `lint()`
         for linter in linterConfig.sections:
-            wrapper_module_name = linter['wrapper_module']
+            wrapper_module_name = linterConfig[linter]['wrapper_module']
+
+            logger.debug(wrapper_module_name)
 
             try:
                 # hack to get the module from its name,
                 # where `linters` is the package name.
                 wrapper_module = __import__('linters.' + wrapper_module_name)
+
                 wrapper_module = getattr(wrapper_module, wrapper_module_name)
 
-                lints.append(wrapper_module.lint(linterConfig, working_dir))
+                lints.extend(wrapper_module.lint(linterConfig, working_dir))
 
             except (ImportError, AttributeError) as e:
                 logger.debug(e)
