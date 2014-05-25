@@ -1,0 +1,22 @@
+<LineLength>100</LineLength>
+
+<InternalVariables>
+<regex>m[A-Za-z]</regex>
+<alignment>0</alignment>
+</InternalVariables>
+
+<Typedefs>
+<regex>.*</regex>
+</Typedefs>
+
+ <BadCharacters>false</BadCharacters>
+
+ <MemberFunctions>
+<regex>.*</regex>
+<length>100</length>
+</MemberFunctions>
+
+<Functions>
+<regex>.*</regex>
+<length>100</length>
+</Functions>

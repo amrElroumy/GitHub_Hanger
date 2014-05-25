@@ -1,14 +1,12 @@
 #!/usr/bin/env python
-
 import os
 import logging
-import subprocess
 import json
 
 from pprint import pformat
 from urllib import urlretrieve
 from configobj import ConfigObj
-from sys import argv, exc_info, executable
+from sys import argv, exc_info
 from github import Github, GithubException
 
 
@@ -30,7 +28,10 @@ def initialize_logging(log_file_path, logfmt, datefmt):
 
 
 class PullsConfigUtilities(object):
-    """docstring for PullsConfigUtilities"""
+    """
+    Maintain the last synchronized heads of each pull request,
+    to limit updates to new commits only
+    """
     def __init__(self):
         super(PullsConfigUtilities, self).__init__()
 
@@ -93,46 +94,31 @@ class PrettyLog():
         return pformat(self.obj)
 
 
-class LintWrapper(object):
-    """docstring for LintWrapper"""
+class LinterWrapper(object):
+    """docstring for LinterWrapper"""
     @staticmethod
-    def lint_files(working_dir, command):
+    def lint_files(working_dir, linterConfig):
         logger.info('Starting linting.')
 
-        logger.debug(command)
-        logger.debug(working_dir)
+        lints = []
 
-        try:
-            p = subprocess.Popen(
-                [executable, command, working_dir],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.PIPE)
+        # iterate over all available linter modules invoke `lint()`
+        for linter in linterConfig.sections:
+            wrapper_module_name = linter['wrapper_module']
 
-            logger.debug(p.communicate())
+            try:
+                # hack to get the module from its name,
+                # where `linters` is the package name.
+                wrapper_module = __import__('linters.' + wrapper_module_name)
+                wrapper_module = getattr(wrapper_module, wrapper_module_name)
 
-        except subprocess.CalledProcessError as e:
-            logger.debug(e.returncode)
-            logger.debug(p.communicate())
-            return None
+                lints.append(wrapper_module.lint(linterConfig, working_dir))
+
+            except (ImportError, AttributeError) as e:
+                logger.debug(e)
+                continue
 
         logger.info('Finished linting.')
-        return "flintOutput"
-
-    @staticmethod
-    def parse_lints(lint_output_path, delimiter):
-        logger.info('Parsing lints.')
-
-        bulk_lints = ''
-        with open(lint_output_path, 'r') as lints:
-            bulk_lints = lints.read()
-
-            bulk_lints = bulk_lints.strip(delimiter).split(delimiter)
-
-        # Combine the each parsed lint into a tuple to easy processing
-        lints = zip(bulk_lints[0::3], bulk_lints[1::3], bulk_lints[2::3])
-
-        logger.info('Finished parsing lints.')
         return lints
 
 
@@ -295,20 +281,16 @@ class PullRequestEvent(GithubEvent):
 
         # Create tmp directory for processing
         import tempfile
-        working_dir = tempfile.mkdtemp(dir=PVT_DIR_PATH)
+        working_dir = tempfile.mkdtemp(dir=TMP_DIR_PATH)
 
         GithubWrapper.download_commit_files(
             working_dir, all_file_names, all_raw_urls)
 
-        lint_output_path = LintWrapper.lint_files(working_dir, FLINT_COMMAND)
+        lints = LinterWrapper.lint_files(working_dir, config['Linters'])
 
-        if lint_output_path is not None:
-            lints = LintWrapper.parse_lints(
-                working_dir + "/" + lint_output_path, DELIMITER_TOKEN)
-
-            if lints:
-                GithubWrapper.post_review_comments(
-                    self.pull_request, all_file_names, lints)
+        if lints:
+            GithubWrapper.post_review_comments(
+                self.pull_request, all_file_names, lints)
 
         try:
             import shutil
@@ -378,17 +360,14 @@ CONFIG_PATH = "/var/www/ghservice/config.ini"
 
 config = ConfigObj(CONFIG_PATH, interpolation=False)
 
-GITHUB_AUTHENTICATION_TOKEN = config['GitHub']['API_TOKEN']
-LOG_FILE_PATH = config['Logging']['LOG_PATH']
-LOG_FORMAT = config['Logging']['LOG_FORMAT']
-LOG_DATE_FORMAT = config['Logging']['DATE_FORMAT']
+GITHUB_AUTHENTICATION_TOKEN = config['GitHub']['api_token']
+LOG_FILE_PATH = config['Logging']['log_path']
+LOG_FORMAT = config['Logging']['log_format']
+LOG_DATE_FORMAT = config['Logging']['date_format']
 
-FLINT_COMMAND = config['Linters']['FLINT']
-DELIMITER_TOKEN = config['Linters']['DELIMITER_TOKEN']
+TMP_DIR_PATH = config['Application']['temp_dir']
 
-PVT_DIR_PATH = config['Application']['PVT_DIR']
-
-PULLS_JSON_PATH = config['PullsHeads']['PATH']
+PULLS_JSON_PATH = config['PullsHeads']['path']
 ## Finished loading configurations
 
 logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)

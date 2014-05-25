@@ -35,10 +35,10 @@ def application(environ, start_response):
 
     config = ConfigObj(CONFIG_PATH, interpolation=False)
 
-    LOG_FILE_PATH = config['Logging']['LOG_PATH']
-    LOG_FORMAT = config['Logging']['LOG_FORMAT']
-    LOG_DATE_FORMAT = config['Logging']['DATE_FORMAT']
-    PVT_DIR_PATH = config['Application']['PVT_DIR']
+    LOG_FILE_PATH = config['Logging']['log_path']
+    LOG_FORMAT = config['Logging']['log_format']
+    LOG_DATE_FORMAT = config['Logging']['date_format']
+    PVT_DIR_PATH = config['Application']['temp_dir']
     ## Finished loading configurations
 
     logger = initialize_logging(LOG_FILE_PATH, LOG_FORMAT, LOG_DATE_FORMAT)
