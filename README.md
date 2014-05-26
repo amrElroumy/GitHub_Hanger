@@ -71,6 +71,10 @@ sudo pip install configobj
 sudo pip install pygithub
 ```
 
+#### Deployment
+
+Deploy the web-service to `/var/www/ghservice/`. Make sure they have the right owner/group set.
+
 ### Linters' Configuration
 
 1. Upload linters' binaries to the following path: `/home/symbyo/linters/`
