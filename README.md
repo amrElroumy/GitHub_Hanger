@@ -2,7 +2,7 @@ GitHub Hanger
 =============
 A Python-based web-service for GitHub web-hooks
 
-## Installation and Configuration
+## Web-server Installation and Configuration
 ### Setting up the Web-server
 
 #### Create folders for our app
@@ -93,3 +93,33 @@ Deploy the web-service to `/var/www/ghservice/`. Make sure they have the right o
     # You can also add a list for "include_patterns" or "ignore_patterns" here which are specific to your linter
     ```
 5. Install linter specific dependencies.
+
+## Webhooks Configuration
+
+In order to create a webhook and configure it to work with your service you could read this [GitHub guide on the subject](https://developer.github.com/webhooks/creating/) or simply follow the next steps.
+
+**Requirements:** You need to have access to the settings panel of the repository you want to enable the webhooks for.
+
+Steps:
+
+1. Go to the settings panel of the repository
+2. Jump to Webhooks and Services tab
+3. In the Webhooks section, click add webhook.
+4. Configure the webhook for your service:
+    - Payload URL: Location where GitHub will send you the payload.. Should be a publicly accessible URL of the web-service. E.g. `http://127.0.0.1/service_directory/script.py`
+    - Content type: "application/x-www-form-urlencoded"
+    - Secret: Not currently used, but it is useful to identify that the payload is from GitHub and not from anyone else.
+    - Event's selection: You get to choose which events you want to be notified with, or all the events, or only the push events. For more information check [this](https://developer.github.com/webhooks/#events)
+    - Is Active: Check this box to activate the webhook
+5. Click update the webhook to save your modifications.
+
+
+A test payload ([Ping Event](https://developer.github.com/webhooks/#ping-event)) will be sent to the payload URL on creation of the webhook to make sure that everything is working. It should look something like this:
+```json
+{
+  "zen": "Anything added dilutes everything else.",
+  "hook_id": 2247556
+}
+```
+
+All the delivered payloads are stored in the recent deliveries of the current webhook, you can easily view them and redeliver them for debugging purposes.
