@@ -124,3 +124,4 @@ def lint(configObj, pathToLint):
             result.extend(splitFileWarnings(runRes))
 
     return result
+

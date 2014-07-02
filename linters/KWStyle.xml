@@ -1,22 +1,60 @@
-<LineLength>100</LineLength>
+<LineLength>81</LineLength>
 
+
+<!-- a protection level must be present before the vars -->
 <InternalVariables>
-<regex>m[A-Za-z]</regex>
+<regex>^m[A-Z][A-Za-z]*$</regex>
 <alignment>0</alignment>
 </InternalVariables>
 
+<SemicolonSpace>0</SemicolonSpace>
+
+<DeclarationOrder>
+<public>0</public>
+<protected>1</protected>
+<private>2</private>
+</DeclarationOrder>
+
+<EndOfFileNewLine>1</EndOfFileNewLine>
+
+<Spaces>0</Spaces>
+
+<IfNDefDefine>
+<pattern>[NameOfClass]_[Extension]</pattern>
+<toUppercase>1</toUppercase>
+</IfNDefDefine>
+
+
 <Typedefs>
-<regex>.*</regex>
+<regex>^([A-Z][a-z]*)+$</regex>
+<alignment>0</alignment>
 </Typedefs>
 
- <BadCharacters>false</BadCharacters>
+<Namespace>Symbyo</Namespace>
 
- <MemberFunctions>
-<regex>.*</regex>
-<length>100</length>
+<NameOfClass>
+<name>[NameOfClass]</name>
+<prefix></prefix>
+</NameOfClass>
+
+<EmptyLines>2</EmptyLines>
+
+<Operator>
+<spaceBefore>1</spaceBefore>
+<spaceAfter>1</spaceAfter>
+</Operator>
+
+<StatementPerLine>
+<maxNumber>1</maxNumber>
+<checkInline>0</checkInline>
+</StatementPerLine>
+
+<BadCharacters>1</BadCharacters>
+
+<MemberFunctions>
+<regex>^[a-z][A-Za-z]*$</regex>
+<length>0</length>
 </MemberFunctions>
 
-<Functions>
-<regex>.*</regex>
-<length>100</length>
-</Functions>
+<UsingDirectives>1</UsingDirectives>
+<RelativePathInInclude>1</RelativePathInInclude>
