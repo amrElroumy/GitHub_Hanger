@@ -2,11 +2,12 @@
 import os
 import logging
 import json
+import requests
 
 from pprint import pformat
-from urllib import urlretrieve
-from configobj import ConfigObj
 from sys import argv, exc_info
+from configobj import ConfigObj
+from requests.auth import HTTPBasicAuth
 from github import Github, GithubException
 
 
@@ -142,11 +143,27 @@ class GithubWrapper(object):
     def download_commit_files(working_dir, filenames, raw_urls):
         logger.debug('Downloading the commit files.')
 
+        gh_auth = HTTPBasicAuth(GITHUB_AUTHENTICATION_TOKEN, 'x-oauth-basic')
+
         path = working_dir + "/" + 'pathLookup.meta'
         with open(path, 'w') as path_lookup_file:
             for fname, furl in zip(filenames, raw_urls):
                 # request file and save it locally
-                urlretrieve(furl, working_dir + "/" + os.path.basename(fname))
+                file_path = working_dir + "/" + os.path.basename(fname)
+
+                with open(file_path, 'wb') as handle:
+                    response = requests.get(furl, auth=gh_auth, stream=True)
+                    handle.write(response.content)
+
+                # In case files exceed size that can be held in memory
+                # we can use the following logic to download files in chunks
+                # if int(response.headers['content-length']) < TOO_LARGE:
+                #     handle.write(response.content)
+                # else:
+                #     for block in response.iter_content(chunk_size=1024*1024):
+                #         if not block:
+                #             break
+                #         handle.write(block)
 
                 # map the relative path and the name of the file
                 path_lookup_file.write(
@@ -274,10 +291,13 @@ class PullRequestEvent(GithubEvent):
             if commit.sha == old_pull_head:
                 break
 
+            raw_files_base_url = "https://raw.githubusercontent.com/" + \
+                repo.full_name + "/" + commit.sha + "/"
+
             for f in commit_modified_files:
                 if f.filename not in all_file_names:
                     new_modified_filenames.append(f.filename)
-                    new_modified_urls.append(f.raw_url)
+                    new_modified_urls.append(raw_files_base_url + f.filename)
 
             all_file_names = all_file_names + new_modified_filenames
             all_raw_urls = all_raw_urls + new_modified_urls
@@ -403,4 +423,3 @@ except:
     raise
 
 logger.info("Finished hook processing")
-
