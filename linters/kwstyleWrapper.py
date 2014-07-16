@@ -116,7 +116,7 @@ def lint(configObj, pathToLint):
     for file in filenames:
         command = "KWStyle '" + file + "' -msvc -xml '" + xmlConfigFile + "'"
         try:
-            runRes = subprocess.check_output([command], shell=True)
+            runRes = subprocess.check_output([command], shell=True, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as e:
             runRes = e.output #KWStyle returns exit code 1 to indicate errors/warnings, so check_output(...) throws an exception
 
