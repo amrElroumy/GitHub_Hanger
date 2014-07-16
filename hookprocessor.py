@@ -187,10 +187,24 @@ class GithubWrapper(object):
 
             filepath = path_lookup[basename]
 
-            pull_request.create_review_comment(
-                comment_body,
-                head_commit,
-                filepath, 0)
+            try:
+                pull_request.create_review_comment(
+                    comment_body,
+                    head_commit,
+                    filepath, 0)
+            except GithubException as e:
+                error = e.data['errors'][0]
+
+                if error['field'] == 'path' and \
+                        error['code'] == 'invalid' and \
+                        error['resource'] == 'PullRequestReviewComment':
+                    # Didn't post comment as file was removed in later commits
+                    continue
+                else:
+                    logger.error("File Path: " + filepath)
+                    logger.error("Comment Body: " + comment_body)
+                    logger.error("Head Commit: " + head_commit.sha)
+                    raise
 
         logger.info('Finished posting review comments.')
 
@@ -340,9 +354,9 @@ class PushEvent(GithubEvent):
         logger.debug(self.ref)
 
         for commit in self.commits:
-            logger.debug(
+            logger.debug("{0} {1} {2} {3}\n".format(
                 commit['id'], commit['message'],
-                commit['author']['name'], commit['author']['email'], "\n")
+                commit['author']['name'], commit['author']['email']))
 
 
 class PingEvent(GithubEvent):
@@ -416,10 +430,11 @@ try:
     event_handler.execute_event()
     logger.info('Finished event execute_event.')
 except GithubException as e:
-    logger.error(e.status + " - " + e.data)
+    logger.error(e)
     raise
 except:
     logger.error("Unexpected error:", exc_info()[0])
     raise
 
 logger.info("Finished hook processing")
+
